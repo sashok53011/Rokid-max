@@ -1,0 +1,352 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Non-PII operator preferences and device profile for AeroLab XR.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "preferredLang": {
+          "type": "string",
+          "enum": ["en", "ru", "de"]
+        },
+        "deviceProfile": {
+          "type": "string",
+          "enum": ["desktop", "mobile", "vr_headset", "rokid_max"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "preferredLang", "deviceProfile", "createdAt", "updatedAt"]
+    },
+    "PrivateUserInfo": {
+      "title": "PrivateUserInfo",
+      "description": "Isolated private operator PII document strictly readable/writable by owner.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "updatedAt"]
+    },
+    "AnalyticsEvent": {
+      "title": "AnalyticsEvent",
+      "description": "Real-time assembly & simulation telemetry sample.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "moduleId": {
+          "type": "string",
+          "enum": ["turbine", "gearbox", "robotarm", "spectrometer", "custom"]
+        },
+        "actionType": {
+          "type": "string",
+          "enum": [
+            "session_started",
+            "part_snapped",
+            "module_completed",
+            "qr_imported",
+            "physics_drop",
+            "gesture_triggered"
+          ]
+        },
+        "accuracyPct": {
+          "type": "number"
+        },
+        "durationMs": {
+          "type": "number"
+        },
+        "collisions": {
+          "type": "number"
+        },
+        "deviceMode": {
+          "type": "string",
+          "enum": ["desktop", "mobile", "vr_headset", "rokid_max"]
+        },
+        "offlineSynced": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "moduleId",
+        "actionType",
+        "accuracyPct",
+        "durationMs",
+        "collisions",
+        "deviceMode",
+        "offlineSynced",
+        "createdAt"
+      ]
+    },
+    "SpatialMapping": {
+      "title": "SpatialMapping",
+      "description": "Cloud-synced room-scale boundary, anchor origin, Rokid profile, and part assembly state.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "moduleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "roomBounds": {
+          "type": "object",
+          "description": "Room-scale dimensions and origin offset in meters."
+        },
+        "partTransforms": {
+          "type": "array",
+          "description": "Bounded list (max 24) of saved part poses and snapped flags."
+        },
+        "rokidProfile": {
+          "type": "object",
+          "description": "Saved Rokid Max optical FOV, IPD, and additive dimming calibration."
+        },
+        "isShared": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "moduleId",
+        "roomBounds",
+        "partTransforms",
+        "rokidProfile",
+        "isShared",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CollaborationSession": {
+      "title": "CollaborationSession",
+      "description": "Metadata for collaborative multiplayer learning rooms.",
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "roomCode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 16,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "moduleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "completed"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["hostId", "roomCode", "moduleId", "status", "createdAt", "updatedAt"]
+    },
+    "SessionParticipant": {
+      "title": "SessionParticipant",
+      "description": "Participant record inside a collaboration session subcollection.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "deviceProfile": {
+          "type": "string",
+          "enum": ["desktop", "mobile", "vr_headset", "rokid_max"]
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "displayName", "deviceProfile", "joinedAt"]
+    },
+    "SpatialRecording": {
+      "title": "SpatialRecording",
+      "description": "Recorded 3D spatial assembly session keyframes and physics interaction timeline for training playback.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "moduleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "deviceMode": {
+          "type": "string",
+          "enum": ["desktop", "mobile", "vr_headset", "rokid_max"]
+        },
+        "durationMs": {
+          "type": "number"
+        },
+        "frameCount": {
+          "type": "integer"
+        },
+        "snapCount": {
+          "type": "integer"
+        },
+        "collisionCount": {
+          "type": "integer"
+        },
+        "avgAccuracyPct": {
+          "type": "number"
+        },
+        "frames": {
+          "type": "array",
+          "description": "Bounded list (1..450) of keyframe maps containing t, exploded, and parts pose maps."
+        },
+        "events": {
+          "type": "array",
+          "description": "Bounded list (0..200) of discrete physics and assembly events."
+        },
+        "isShared": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "moduleId",
+        "deviceMode",
+        "durationMs",
+        "frameCount",
+        "snapCount",
+        "collisionCount",
+        "avgAccuracyPct",
+        "frames",
+        "events",
+        "isShared",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User non-PII preferences and device calibration profile."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/PrivateUserInfo" },
+      "description": "Isolated PII storage strictly restricted to the owning user."
+    },
+    "/analyticsEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/AnalyticsEvent" },
+      "description": "Real-time user performance analytics events."
+    },
+    "/spatialMappings/{mappingId}": {
+      "schema": { "$ref": "#/entities/SpatialMapping" },
+      "description": "Cloud-synced spatial mappings and room-scale calibrations."
+    },
+    "/spatialRecordings/{recordingId}": {
+      "schema": { "$ref": "#/entities/SpatialRecording" },
+      "description": "Cloud-synced spatial assembly session recordings for training review."
+    },
+    "/collaborationSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/CollaborationSession" },
+      "description": "Multiplayer collaborative learning session metadata."
+    },
+    "/collaborationSessions/{sessionId}/participants/{participantId}": {
+      "schema": { "$ref": "#/entities/SessionParticipant" },
+      "description": "Active participants enrolled in a collaborative session."
+    }
+  }
+}

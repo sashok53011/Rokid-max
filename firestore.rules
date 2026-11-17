@@ -1,0 +1,407 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global default deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Global hardened primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidLang(lang) {
+      return lang is string && lang in ['en', 'ru', 'de'];
+    }
+
+    function isValidDeviceProfile(profile) {
+      return profile is string && profile in ['desktop', 'mobile', 'vr_headset', 'rokid_max'];
+    }
+
+    function isValidModuleId(moduleId) {
+      return moduleId is string && moduleId.size() >= 1 && moduleId.size() <= 40 && moduleId.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Pillar 2: Validation Blueprints
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'preferredLang', 'deviceProfile', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'preferredLang', 'deviceProfile', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == userId && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 64
+        && isValidLang(data.preferredLang)
+        && isValidDeviceProfile(data.deviceProfile)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateUserInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'updatedAt'])
+        && data.uid is string && data.uid == userId && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAnalyticsEvent(data) {
+      return data.keys().hasAll([
+          'userId', 'moduleId', 'actionType', 'accuracyPct',
+          'durationMs', 'collisions', 'deviceMode', 'offlineSynced', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'moduleId', 'actionType', 'accuracyPct',
+          'durationMs', 'collisions', 'deviceMode', 'offlineSynced', 'createdAt'
+        ])
+        && data.userId is string && data.userId == request.auth.uid && isValidId(data.userId)
+        && data.moduleId is string && data.moduleId in ['turbine', 'gearbox', 'robotarm', 'spectrometer', 'custom']
+        && data.actionType is string && data.actionType in [
+          'session_started', 'part_snapped', 'module_completed',
+          'qr_imported', 'physics_drop', 'gesture_triggered'
+        ]
+        && data.accuracyPct is number && data.accuracyPct >= 0 && data.accuracyPct <= 100
+        && data.durationMs is number && data.durationMs >= 0 && data.durationMs <= 86400000
+        && data.collisions is int && data.collisions >= 0 && data.collisions <= 10000
+        && isValidDeviceProfile(data.deviceMode)
+        && data.offlineSynced is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidRoomBounds(bounds) {
+      return bounds is map
+        && bounds.keys().hasAll(['width', 'depth', 'height', 'originX', 'originY', 'originZ'])
+        && bounds.keys().hasOnly(['width', 'depth', 'height', 'originX', 'originY', 'originZ'])
+        && bounds.width is number && bounds.width >= 0.5 && bounds.width <= 50
+        && bounds.depth is number && bounds.depth >= 0.5 && bounds.depth <= 50
+        && bounds.height is number && bounds.height >= 1 && bounds.height <= 20
+        && bounds.originX is number && bounds.originX >= -25 && bounds.originX <= 25
+        && bounds.originY is number && bounds.originY >= -10 && bounds.originY <= 10
+        && bounds.originZ is number && bounds.originZ >= -25 && bounds.originZ <= 25;
+    }
+
+    function isValidRokidProfile(profile) {
+      return profile is map
+        && profile.keys().hasAll(['fov', 'ipdMm', 'sbsMode', 'additiveDimming'])
+        && profile.keys().hasOnly(['fov', 'ipdMm', 'sbsMode', 'additiveDimming'])
+        && profile.fov is number && profile.fov >= 30 && profile.fov <= 120
+        && profile.ipdMm is number && profile.ipdMm >= 50 && profile.ipdMm <= 78
+        && profile.sbsMode is bool
+        && profile.additiveDimming is number && profile.additiveDimming >= 0 && profile.additiveDimming <= 1;
+    }
+
+    function isValidPartTransforms(transforms) {
+      return transforms is list
+        && transforms.size() <= 24
+        && (transforms.size() == 0 || (
+          transforms[0] is map
+          && transforms[0].keys().hasAll(['id', 'x', 'y', 'z', 'snapped'])
+          && transforms[0].keys().hasOnly(['id', 'x', 'y', 'z', 'snapped'])
+          && transforms[0].id is string && transforms[0].id.size() >= 1 && transforms[0].id.size() <= 64
+          && transforms[0].x is number
+          && transforms[0].y is number
+          && transforms[0].z is number
+          && transforms[0].snapped is bool
+        ));
+    }
+
+    function isValidSpatialMapping(data) {
+      return data.keys().hasAll([
+          'ownerId', 'name', 'moduleId', 'roomBounds',
+          'partTransforms', 'rokidProfile', 'isShared', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'moduleId', 'roomBounds',
+          'partTransforms', 'rokidProfile', 'isShared', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && isValidModuleId(data.moduleId)
+        && isValidRoomBounds(data.roomBounds)
+        && isValidPartTransforms(data.partTransforms)
+        && isValidRokidProfile(data.rokidProfile)
+        && data.isShared is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRecordingFrameParts(parts) {
+      return parts is list
+        && parts.size() <= 24
+        && (parts.size() == 0 || (
+          parts[0] is map
+          && parts[0].keys().hasAll(['id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'snapped'])
+          && parts[0].keys().hasOnly(['id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'snapped'])
+          && parts[0].id is string && parts[0].id.size() >= 1 && parts[0].id.size() <= 64
+          && parts[0].x is number
+          && parts[0].y is number
+          && parts[0].z is number
+          && parts[0].qx is number
+          && parts[0].qy is number
+          && parts[0].qz is number
+          && parts[0].qw is number
+          && parts[0].snapped is bool
+        ));
+    }
+
+    function isValidRecordingFrames(frames) {
+      return frames is list
+        && frames.size() >= 1
+        && frames.size() <= 450
+        && frames[0] is map
+        && frames[0].keys().hasAll(['t', 'exploded', 'parts'])
+        && frames[0].keys().hasOnly(['t', 'exploded', 'parts'])
+        && frames[0].t is number && frames[0].t >= 0 && frames[0].t <= 86400000
+        && frames[0].exploded is number && frames[0].exploded >= 0 && frames[0].exploded <= 1
+        && isValidRecordingFrameParts(frames[0].parts);
+    }
+
+    function isValidRecordingEvents(events) {
+      return events is list
+        && events.size() <= 200
+        && (events.size() == 0 || (
+          events[0] is map
+          && events[0].keys().hasAll(['t', 'type', 'partId', 'partLabel', 'accuracyPct', 'x', 'y', 'z'])
+          && events[0].keys().hasOnly(['t', 'type', 'partId', 'partLabel', 'accuracyPct', 'x', 'y', 'z'])
+          && events[0].t is number && events[0].t >= 0 && events[0].t <= 86400000
+          && events[0].type is string && events[0].type in ['grab', 'release', 'snap', 'collision', 'exploded', 'complete']
+          && events[0].partId is string && events[0].partId.size() <= 64
+          && events[0].partLabel is string && events[0].partLabel.size() <= 80
+          && events[0].accuracyPct is number && events[0].accuracyPct >= 0 && events[0].accuracyPct <= 100
+          && events[0].x is number
+          && events[0].y is number
+          && events[0].z is number
+        ));
+    }
+
+    function isValidSpatialRecording(data) {
+      return data.keys().hasAll([
+          'ownerId', 'name', 'moduleId', 'deviceMode', 'durationMs',
+          'frameCount', 'snapCount', 'collisionCount', 'avgAccuracyPct',
+          'frames', 'events', 'isShared', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'moduleId', 'deviceMode', 'durationMs',
+          'frameCount', 'snapCount', 'collisionCount', 'avgAccuracyPct',
+          'frames', 'events', 'isShared', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && isValidModuleId(data.moduleId)
+        && isValidDeviceProfile(data.deviceMode)
+        && data.durationMs is number && data.durationMs >= 0 && data.durationMs <= 86400000
+        && data.frameCount is int && data.frameCount >= 1 && data.frameCount <= 450
+        && data.snapCount is int && data.snapCount >= 0 && data.snapCount <= 500
+        && data.collisionCount is int && data.collisionCount >= 0 && data.collisionCount <= 10000
+        && data.avgAccuracyPct is number && data.avgAccuracyPct >= 0 && data.avgAccuracyPct <= 100
+        && isValidRecordingFrames(data.frames)
+        && isValidRecordingEvents(data.events)
+        && data.isShared is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCollaborationSession(data) {
+      return data.keys().hasAll(['hostId', 'roomCode', 'moduleId', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['hostId', 'roomCode', 'moduleId', 'status', 'createdAt', 'updatedAt'])
+        && data.hostId is string && isValidId(data.hostId)
+        && data.roomCode is string && data.roomCode.size() >= 4 && data.roomCode.size() <= 16 && data.roomCode.matches('^[a-zA-Z0-9_\\-]+$')
+        && isValidModuleId(data.moduleId)
+        && data.status is string && data.status in ['active', 'completed']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidParticipant(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'deviceProfile', 'joinedAt'])
+        && data.keys().hasOnly(['userId', 'displayName', 'deviceProfile', 'joinedAt'])
+        && data.userId is string && data.userId == request.auth.uid && isValidId(data.userId)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 64
+        && isValidDeviceProfile(data.deviceProfile)
+        && data.joinedAt is timestamp;
+    }
+
+    // Users collection (non-PII preferences)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'preferredLang', 'deviceProfile', 'updatedAt']);
+      allow delete: if false;
+
+      // Isolated PII subcollection
+      match /private/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && isOwner(userId);
+        allow list: if false;
+        allow create: if isVerified()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isOwner(userId)
+          && isValidPrivateUserInfo(incoming(), userId)
+          && incoming().updatedAt == request.time;
+        allow update: if isVerified()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isOwner(userId)
+          && isValidPrivateUserInfo(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+        allow delete: if false;
+      }
+    }
+
+    // Analytics events collection
+    match /analyticsEvents/{eventId} {
+      allow get: if isSignedIn() && isValidId(eventId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(eventId)
+        && isValidAnalyticsEvent(incoming())
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // Spatial mappings collection (cloud-synced across sessions)
+    match /spatialMappings/{mappingId} {
+      allow get: if isSignedIn()
+        && isValidId(mappingId)
+        && (existing().ownerId == request.auth.uid || existing().isShared == true);
+      allow list: if isSignedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.isShared == true);
+      allow create: if isVerified()
+        && isValidId(mappingId)
+        && isValidSpatialMapping(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(mappingId)
+        && isValidSpatialMapping(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'moduleId', 'roomBounds', 'partTransforms', 'rokidProfile', 'isShared', 'updatedAt'
+          ])
+        );
+      allow delete: if isVerified()
+        && isValidId(mappingId)
+        && existing().ownerId == request.auth.uid;
+    }
+
+    // Spatial recordings collection (3D training session playback)
+    match /spatialRecordings/{recordingId} {
+      allow get: if isSignedIn()
+        && isValidId(recordingId)
+        && (existing().ownerId == request.auth.uid || existing().isShared == true);
+      allow list: if isSignedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.isShared == true);
+      allow create: if isVerified()
+        && isValidId(recordingId)
+        && isValidSpatialRecording(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(recordingId)
+        && isValidSpatialRecording(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'isShared', 'updatedAt']);
+      allow delete: if isVerified()
+        && isValidId(recordingId)
+        && existing().ownerId == request.auth.uid;
+    }
+
+    // Collaborative multiplayer sessions
+    match /collaborationSessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId);
+      allow list: if isSignedIn() && resource.data.hostId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(sessionId)
+        && isValidCollaborationSession(incoming())
+        && incoming().hostId == request.auth.uid
+        && incoming().status == 'active'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(sessionId)
+        && isValidCollaborationSession(incoming())
+        && existing().hostId == request.auth.uid
+        && existing().status == 'active'
+        && incoming().hostId == existing().hostId
+        && incoming().roomCode == existing().roomCode
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['moduleId', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        );
+      allow delete: if isVerified()
+        && isValidId(sessionId)
+        && existing().hostId == request.auth.uid;
+
+      // Pillar 1: Master Gate subcollection validating parent session exists & is active
+      match /participants/{participantId} {
+        allow get: if isSignedIn()
+          && isValidId(sessionId)
+          && isValidId(participantId)
+          && exists(/databases/$(database)/documents/collaborationSessions/$(sessionId));
+        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow create: if isVerified()
+          && isValidId(sessionId)
+          && isValidId(participantId)
+          && participantId == request.auth.uid
+          && isValidParticipant(incoming())
+          && incoming().joinedAt == request.time
+          && exists(/databases/$(database)/documents/collaborationSessions/$(sessionId))
+          && get(/databases/$(database)/documents/collaborationSessions/$(sessionId)).data.status == 'active';
+        allow update: if false;
+        allow delete: if isVerified()
+          && isValidId(sessionId)
+          && isValidId(participantId)
+          && (
+            participantId == request.auth.uid ||
+            get(/databases/$(database)/documents/collaborationSessions/$(sessionId)).data.hostId == request.auth.uid
+          );
+      }
+    }
+  }
+}

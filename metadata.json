@@ -1,0 +1,6 @@
+{
+  "name": "AeroLab XR",
+  "description": "Cross-platform XR Blocks 3D interactive assembly, physics simulation, multiplayer collaboration, Rokid Max AR, QR room-scale import, and cloud-synced field training.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": []
+}
